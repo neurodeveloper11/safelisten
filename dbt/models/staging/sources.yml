@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Tablas que carga SafeListen (solo texto ya anonimizado y señales de Alómetro).
+    schema: "{{ target.schema }}"
+    tables:
+      - name: raw_lotes
+      - name: raw_evaluaciones
+      - name: raw_criterios
+      - name: raw_revisiones_llm

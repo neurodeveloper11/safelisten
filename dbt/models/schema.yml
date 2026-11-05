@@ -1,0 +1,34 @@
+version: 2
+
+models:
+  - name: stg_evaluaciones
+    description: Una fila por conversación calificada.
+    columns:
+      - name: conversacion_id
+        tests: [not_null]
+      - name: puntaje
+        tests: [not_null]
+      - name: nivel
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["Excelente", "Bueno", "Mejorable", "Deficiente", "Crítico"]
+      - name: resolucion
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["resuelto", "en_tramite", "no_resuelto", "incierto"]
+  - name: stg_lotes
+    columns:
+      - name: lote_id
+        tests: [unique, not_null]
+      - name: sha256
+        tests: [not_null]
+  - name: mart_indicadores_diarios
+    columns:
+      - name: conversaciones
+        tests: [not_null]
+  - name: mart_privacidad_lotes
+    columns:
+      - name: lote_id
+        tests: [unique]

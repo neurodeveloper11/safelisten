@@ -1,0 +1,8 @@
+.git
+.github
+docs
+dbt
+infra
+tests
+**/__pycache__
+*.duckdb

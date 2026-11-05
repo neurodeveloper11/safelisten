@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar
+        run: pip install -e ".[dev]"
+      - name: Ruff
+        run: ruff check src tests
+      - name: Pytest
+        run: pytest -q
+      - name: Demo de punta a punta
+        run: safelisten demo -o demo -n 200
+      - name: dbt build (DuckDB)
+        working-directory: dbt
+        env:
+          SAFELISTEN_DUCKDB: ../demo/safelisten.duckdb
+        run: dbt build --profiles-dir .
+
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false
+      - run: terraform validate
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir imagen
+        run: docker build -t safelisten:ci .
+      - name: Arranca y responde /salud
+        run: |
+          docker run -d --name sl -p 8080:8080 -e SAFELISTEN_TOKEN=ci safelisten:ci
+          for i in $(seq 1 30); do curl -fsS localhost:8080/salud && exit 0; sleep 1; done
+          docker logs sl; exit 1

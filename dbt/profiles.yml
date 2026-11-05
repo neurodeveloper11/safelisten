@@ -1,0 +1,16 @@
+# dev: DuckDB local (lo crea `safelisten demo` o `safelisten procesar`).
+# prod: BigQuery en GCP, autenticado con Application Default Credentials.
+safelisten:
+  target: "{{ env_var('DBT_TARGET', 'dev') }}"
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('SAFELISTEN_DUCKDB', 'safelisten.duckdb') }}"
+      schema: main
+    prod:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('SAFELISTEN_BQ_PROYECTO', 'definir-proyecto') }}"
+      dataset: "{{ env_var('SAFELISTEN_BQ_DATASET', 'safelisten') }}"
+      location: "{{ env_var('SAFELISTEN_BQ_UBICACION', 'US') }}"
+      threads: 4

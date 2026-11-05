@@ -1,0 +1,2 @@
+proyecto = "mi-proyecto-gcp"
+imagen   = "southamerica-east1-docker.pkg.dev/mi-proyecto-gcp/safelisten/api:0.1.0"
