@@ -38,7 +38,8 @@ Ambas se instalan como dependencias fijadas a un commit; este repositorio no cop
 | `manifest.py` | Ambas | Evidencia por lote: conteos por tipo de dato, resultado de la compuerta, versiones y SHA-256. |
 | `score.py` / `warehouse.py` | Nube | Califica con Alómetro y carga en DuckDB (local) o BigQuery, de forma idempotente por lote. |
 | `review.py` | Nube | Segunda opinión con un modelo de lenguaje, solo para resoluciones `incierto`, con salida JSON de esquema fijo. Antes de enviar, repite la compuerta. |
-| `api.py` | Nube | FastAPI para Cloud Run: `POST /v1/lotes` con token Bearer y `GET /salud`. |
+| `whatsapp.py` | Empresa | Lee los chats exportados de WhatsApp (.txt o .zip) sin dejar pasar los nombres ni los celulares de los participantes. |
+| `api.py` | Nube | FastAPI para Cloud Run: `POST /v1/lotes` con token Bearer y `GET /salud`. La calificación corre en un hilo aparte, así que el servidor sigue respondiendo mientras procesa. |
 | `flows.py` | Empresa | Flujo nocturno con Prefect (exportar → enviar). |
 | `dbt/` | Nube | Staging y marts: indicadores diarios, cumplimiento por norma, coaching por asesor y evidencia de privacidad. Corre igual en DuckDB y en BigQuery. |
 | `infra/terraform/` | Nube | Cloud Run, BigQuery, Artifact Registry, Secret Manager y una cuenta de servicio con mínimo privilegio. |
@@ -57,11 +58,12 @@ Lo que se comprobó, y que las pruebas automáticas repiten en cada cambio:
 * **La anonimización no altera la medición:** cada criterio de cada conversación, el puntaje y los 16 indicadores de Alómetro dan exactamente igual con y sin datos personales. (Una primera versión mostraba una diferencia: Alómetro contaba dos veces que el cliente dictara de nuevo su cédula. Se corrigió en Alómetro.)
 * **La nube no confía en la empresa:** un lote con manifiesto válido pero con un correo en el texto se rechaza completo y no se guarda nada.
 * **Integridad:** si se altera un solo byte del archivo, el SHA-256 no coincide y el lote se rechaza.
-* **dbt:** 18 modelos y pruebas de datos, incluida una que falla si algún cliente llega sin seudónimo.
+* **dbt:** 19 modelos y pruebas de datos, incluida una que falla si algún cliente llega sin seudónimo.
+* **De punta a punta por HTTP:** una prueba levanta la API con uvicorn y le sube un lote con el mismo cliente que usa `safelisten enviar`.
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                                     # 28 pruebas
+pytest -q                                     # 51 pruebas
 safelisten demo -o demo -n 400                # flujo completo con datos sintéticos
 cd dbt && SAFELISTEN_DUCKDB=../demo/safelisten.duckdb dbt build --profiles-dir .
 ```
@@ -84,7 +86,26 @@ safelisten enviar lote/ --url https://safelisten-api-xxxx.a.run.app --token "$SA
 safelisten procesar lote/ --duckdb safelisten.duckdb
 ```
 
-Formatos de entrada: los mismos de Alómetro (JSONL, CSV con `,` `;` o tabulador, Excel, texto `Agente:`/`Cliente:`, subtítulos `.srt`/`.vtt` de motores de voz a texto).
+Formatos de entrada: los de Alómetro (JSONL, CSV con `,` `;` o tabulador, Excel, texto `Agente:`/`Cliente:`, subtítulos `.srt`/`.vtt` de motores de voz a texto) y **chats exportados de WhatsApp** («Exportar chat», Android o iPhone, el `.txt` o el `.zip` tal como sale del celular).
+
+### WhatsApp
+
+```bash
+safelisten exportar chats_whatsapp/ -o lote/ --org "Mi Empresa" --empresa "Banco Cordillera" --sal-archivo sal.txt
+```
+
+* El encabezado de cada mensaje trae el nombre o el celular de quien escribe. Ese dato **no entra en la conversación**: los participantes pasan a ser `participante_1`, `participante_2`…, y el del cliente solo se usa como `cliente_id`, que se reemplaza por el seudónimo HMAC. Así, el mismo cliente en dos chats tiene el mismo seudónimo y se puede medir el recontacto a 7 días.
+* `--empresa` indica con qué nombre aparece la empresa. Si se omite, Alómetro infiere quién atiende por lo que dice cada participante.
+* Del `.zip` solo se lee el chat; las fotos, audios y documentos adjuntos no se abren. Los avisos del sistema y los «multimedia omitido» se descartan, y los mensajes seguidos de una misma persona se unen en un turno.
+
+### Segunda opinión con LLM
+
+```bash
+pip install ".[llm]"
+safelisten procesar lote/ --duckdb safelisten.duckdb --revision-llm
+```
+
+Solo los casos que Alómetro deja con resolución `incierto` se envían, y antes de cada envío se repite la compuerta de fugas. Las respuestas quedan en `raw_revisiones_llm` junto a la decisión de las reglas, para medir su acuerdo.
 
 ## Despliegue en Google Cloud
 
@@ -105,7 +126,8 @@ Para la segunda opinión con LLM: `pip install ".[llm]"`, configure `ANTHROPIC_A
 * No es asesoría jurídica. Los criterios resumen la Ley 2300 de 2023, la Ley 1480 de 2011, la Ley 1581 de 2012 y resoluciones de la CRC; verifique el texto vigente.
 * La anonimización es heurística: por eso hay dos detectores, cuarentena y rechazo en la nube. Aun así, ningún sistema garantiza el 100 %.
 * Las cifras del sitio vienen de datos sintéticos. En un piloto se miden con conversaciones reales y se calibran contra analistas.
-* El módulo de BigQuery y el flujo de Prefect se probaron con dobles de prueba y en CI, no contra un proyecto real de GCP.
+* La carga a BigQuery se prueba con un cliente simulado que usa los tipos reales de `google-cloud-bigquery`; no se ha ejecutado contra un proyecto real de GCP. El flujo de Prefect (`flows.py`) no tiene prueba automática.
+* La lectura de WhatsApp se probó con los formatos de exportación de Android e iPhone en español; otros idiomas o formatos de fecha del teléfono pueden requerir ajustes.
 
 ## Autor
 

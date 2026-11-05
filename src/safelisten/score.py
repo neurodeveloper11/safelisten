@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import timezone
 
 from alometro import evaluar
+from alometro.calendario import HORA_COLOMBIA
 from alometro.modelos import Conversacion, Evaluacion
 
 # Esquemas portables: tipos que existen en DuckDB y en BigQuery.
@@ -90,8 +91,9 @@ ESQUEMAS: dict[str, list[tuple[str, str]]] = {
 def _hora_utc(conv: Conversacion) -> tuple[str | None, str | None]:
     if not conv.inicio:
         return None, None
-    local = conv.inicio
-    utc = local.astimezone(timezone.utc) if local.tzinfo else local
+    # Sin zona horaria se asume hora de Colombia (UTC-5), como hace Alómetro con la Ley 2300.
+    local = conv.inicio if conv.inicio.tzinfo else conv.inicio.replace(tzinfo=HORA_COLOMBIA)
+    utc = local.astimezone(timezone.utc)
     return utc.strftime("%Y-%m-%d %H:%M:%S"), local.strftime("%Y-%m-%d")
 
 

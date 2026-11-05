@@ -76,3 +76,37 @@ def test_anonimizar_no_altera_la_medicion(convs_antes, convs_despues):
     ind_a = {i.id: i.valor for i in calcular_indicadores(ev_orig)["indicadores"]}
     ind_b = {i.id: i.valor for i in calcular_indicadores(ev_anon)["indicadores"]}
     assert ind_a == ind_b
+
+
+def test_hora_sin_zona_se_asume_colombia():
+    from datetime import datetime
+
+    from alometro.modelos import Conversacion, Turno
+
+    from safelisten.score import _hora_utc
+
+    conv = Conversacion(id="x", turnos=[Turno("cliente", "hola")], inicio=datetime(2026, 11, 5, 21, 30))
+    assert _hora_utc(conv) == ("2026-11-06 02:30:00", "2026-11-05")
+
+
+@pytest.mark.parametrize(
+    "manifiesto",
+    [[], {"esquema": mf.ESQUEMA, "archivo": "x", "compuerta": {}}, {"esquema": mf.ESQUEMA}],
+)
+def test_manifiesto_malformado_se_rechaza(tmp_path, manifiesto):
+    with pytest.raises(LoteRechazado):
+        procesar(manifiesto, b"", DuckDBWarehouse(tmp_path / "wh.duckdb"))
+
+
+def test_revisar_inciertos_guarda_revisiones(tmp_path, lote):
+    from test_review import ClienteFalso
+
+    from safelisten.pipeline import revisar_inciertos
+
+    wh = DuckDBWarehouse(tmp_path / "wh.duckdb")
+    r = procesar_directorio(lote.directorio, wh)
+    inciertos = sum(1 for e in r.evaluaciones if e.senales.get("resolucion") == "incierto")
+    cliente = ClienteFalso()
+    revisiones = revisar_inciertos(r, wh, cliente)
+    assert len(revisiones) == inciertos == len(cliente.llamadas)
+    assert wh.consultar("select count(*) as n from raw_revisiones_llm")[0]["n"] == inciertos

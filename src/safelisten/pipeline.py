@@ -10,15 +10,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
 from alometro import calcular_indicadores
-from alometro.cargar import a_jsonl, cargar, desde_jsonl
+from alometro.cargar import FORMATOS, a_jsonl, cargar, desde_jsonl
 from alometro.modelos import Conversacion, Evaluacion
 
 from . import manifest as mf
+from . import whatsapp
 from .edge import anonimizar_lote
 from .gate import compuerta
 from .score import calificar, fila_lote
@@ -42,6 +43,7 @@ class ResultadoProceso:
     conversaciones: int
     evaluaciones: list[Evaluacion]
     resumen: dict
+    convs: list[Conversacion] = field(default_factory=list, repr=False)
 
     def a_dict(self) -> dict:
         inds = {
@@ -56,10 +58,27 @@ class ResultadoProceso:
         }
 
 
-def cargar_entradas(rutas: list[str | Path]) -> list[Conversacion]:
+FORMATOS_ENTRADA = FORMATOS | {".zip"}
+
+
+def _cargar_archivo(ruta: Path, empresa: list[str] | None) -> list[Conversacion]:
+    if ruta.suffix.lower() in (".txt", ".zip"):
+        texto = whatsapp.texto_de_archivo(ruta)
+        if ruta.suffix.lower() == ".zip" or whatsapp.es_exportacion(texto):
+            return [whatsapp.leer(texto, ruta.stem, empresa)]
+    return cargar(ruta)
+
+
+def cargar_entradas(rutas: list[str | Path], empresa: list[str] | None = None) -> list[Conversacion]:
+    """Carga archivos o carpetas. Además de los formatos de Alómetro, reconoce los chats
+    exportados de WhatsApp (.txt o .zip)."""
     convs: list[Conversacion] = []
-    for ruta in rutas:
-        convs.extend(cargar(ruta))
+    for ruta in map(Path, rutas):
+        archivos = (
+            sorted(f for f in ruta.iterdir() if f.suffix.lower() in FORMATOS_ENTRADA) if ruta.is_dir() else [ruta]
+        )
+        for archivo in archivos:
+            convs.extend(_cargar_archivo(archivo, empresa))
     return convs
 
 
@@ -78,8 +97,10 @@ def exportar_conversaciones(
     return ResultadoExportacion(directorio, manifiesto, resultado.en_cuarentena)
 
 
-def exportar(rutas: list[str | Path], salida: str | Path, sal: bytes, organizacion: str) -> ResultadoExportacion:
-    return exportar_conversaciones(cargar_entradas(rutas), salida, sal, organizacion)
+def exportar(
+    rutas: list[str | Path], salida: str | Path, sal: bytes, organizacion: str, empresa: list[str] | None = None
+) -> ResultadoExportacion:
+    return exportar_conversaciones(cargar_entradas(rutas, empresa), salida, sal, organizacion)
 
 
 def leer_lote(manifiesto: dict, datos: bytes) -> list[Conversacion]:
@@ -106,7 +127,24 @@ def procesar(manifiesto: dict, datos: bytes, warehouse: Warehouse) -> ResultadoP
     warehouse.cargar("raw_lotes", lote_id, [fila_lote(manifiesto, recibido)])
     for tabla, filas_tabla in filas.items():
         warehouse.cargar(tabla, lote_id, filas_tabla)
-    return ResultadoProceso(lote_id, len(convs), evaluaciones, calcular_indicadores(evaluaciones))
+    return ResultadoProceso(lote_id, len(convs), evaluaciones, calcular_indicadores(evaluaciones), convs)
+
+
+def revisar_inciertos(resultado: ResultadoProceso, warehouse: Warehouse, cliente=None) -> list:
+    """Segunda opinión con LLM solo para las conversaciones que Alómetro dejó en «incierto».
+
+    Guarda cada revisión en ``raw_revisiones_llm``. Las conversaciones que aún tengan
+    posibles datos personales no se envían (``review.revisar`` repite la compuerta).
+    """
+    from . import review
+
+    revisiones = [
+        review.revisar(conv, ev, cliente)
+        for conv, ev in zip(resultado.convs, resultado.evaluaciones)
+        if review.necesita_revision(ev)
+    ]
+    warehouse.cargar("raw_revisiones_llm", resultado.lote_id, [r.fila(resultado.lote_id) for r in revisiones])
+    return revisiones
 
 
 def procesar_directorio(directorio: str | Path, warehouse: Warehouse) -> ResultadoProceso:

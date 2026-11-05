@@ -136,3 +136,8 @@ def test_entidad_cortada_a_mitad_de_palabra():
 def test_compuerta_detecta_nombre_por_contexto():
     assert ("NOMBRE", "regex") in revisar_texto("¿Hablo con Gertrudis?")
     assert revisar_texto("señora, tengo un problema") == []
+
+
+def test_compuerta_tarjeta_valida_por_luhn():
+    assert ("TARJETA_CREDITO", "regex") in revisar_texto("número 4111-1111-1111-1111 gracias")
+    assert all(t != "TARJETA_CREDITO" for t, _ in revisar_texto("referencia 1234-5678-9012-3456"))

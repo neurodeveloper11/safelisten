@@ -13,15 +13,18 @@ from __future__ import annotations
 import hmac
 import json
 import os
+import threading
 from collections.abc import Callable
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+from starlette.concurrency import run_in_threadpool
 
 from . import __version__
 from .pipeline import LoteRechazado, procesar
 from .warehouse import BigQueryWarehouse, DuckDBWarehouse, Warehouse
 
 MAX_BYTES = 50 * 1024 * 1024
+MAX_BYTES_MANIFIESTO = 256 * 1024
 
 
 def warehouse_desde_entorno() -> Warehouse:
@@ -38,6 +41,17 @@ def crear_app(warehouse: Callable[[], Warehouse] = warehouse_desde_entorno, toke
         raise RuntimeError("Falta SAFELISTEN_TOKEN (o SAFELISTEN_MODO_DESARROLLO=1 para pruebas locales).")
 
     app = FastAPI(title="SafeListen", version=__version__)
+    # Un solo warehouse para todo el proceso (no una conexión por petición) y un candado:
+    # la calificación corre en un hilo aparte para no bloquear el servidor, y una conexión
+    # DuckDB no debe usarse desde dos hilos a la vez.
+    estado: dict[str, Warehouse] = {}
+    candado = threading.Lock()
+
+    def procesar_seguro(meta: dict, datos: bytes):
+        with candado:
+            if "wh" not in estado:
+                estado["wh"] = warehouse()
+            return procesar(meta, datos, estado["wh"])
 
     def autorizar(authorization: str | None = Header(default=None)) -> None:
         if not token:
@@ -55,12 +69,17 @@ def crear_app(warehouse: Callable[[], Warehouse] = warehouse_desde_entorno, toke
         datos = await conversaciones.read(MAX_BYTES + 1)
         if len(datos) > MAX_BYTES:
             raise HTTPException(status_code=413, detail="Lote demasiado grande (máx. 50 MB). Divídalo.")
+        crudo = await manifiesto.read(MAX_BYTES_MANIFIESTO + 1)
+        if len(crudo) > MAX_BYTES_MANIFIESTO:
+            raise HTTPException(status_code=413, detail="Manifiesto demasiado grande.")
         try:
-            meta = json.loads(await manifiesto.read())
-        except json.JSONDecodeError as e:
+            meta = json.loads(crudo)
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
             raise HTTPException(status_code=422, detail="El manifiesto no es JSON válido.") from e
+        if not isinstance(meta, dict):
+            raise HTTPException(status_code=422, detail="El manifiesto debe ser un objeto JSON.")
         try:
-            resultado = procesar(meta, datos, warehouse())
+            resultado = await run_in_threadpool(procesar_seguro, meta, datos)
         except LoteRechazado as e:
             raise HTTPException(status_code=422, detail=str(e)) from e
         return resultado.a_dict()

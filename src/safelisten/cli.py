@@ -67,7 +67,7 @@ def _imprimir_indicadores(resultado) -> None:
 
 
 def cmd_exportar(args: argparse.Namespace) -> None:
-    r = exportar(args.entradas, args.salida, _sal(args), args.org)
+    r = exportar(args.entradas, args.salida, _sal(args), args.org, args.empresa)
     p = r.manifiesto["privacidad"]
     print(
         f"Lote {r.manifiesto['lote_id']}: {r.manifiesto['compuerta']['aprobadas']} conversaciones "
@@ -86,6 +86,14 @@ def cmd_procesar(args: argparse.Namespace) -> None:
         sys.exit(f"Lote rechazado: {e}")
     print(f"Lote {r.lote_id}: {r.conversaciones} conversaciones calificadas y cargadas en {args.duckdb}")
     _imprimir_indicadores(r)
+    if args.revision_llm:
+        from .pipeline import revisar_inciertos
+
+        revisiones = revisar_inciertos(r, wh)
+        estados: dict[str, int] = {}
+        for rev in revisiones:
+            estados[rev.estado] = estados.get(rev.estado, 0) + 1
+        print(f"Segunda opinión con LLM: {len(revisiones)} casos inciertos revisados {estados}")
 
 
 def cmd_enviar(args: argparse.Namespace) -> None:
@@ -158,15 +166,30 @@ def main(argv: list[str] | None = None) -> None:
     )
 
     e = sub.add_parser("exportar", help="Zona local: anonimiza y prepara el lote.")
-    e.add_argument("entradas", nargs="+", help="Archivos o carpetas (.jsonl, .csv, .xlsx, .txt, .srt, .vtt).")
+    e.add_argument(
+        "entradas",
+        nargs="+",
+        help="Archivos o carpetas (.jsonl, .csv, .xlsx, .txt, .srt, .vtt, chat de WhatsApp .txt/.zip).",
+    )
     e.add_argument("-o", "--salida", required=True)
     e.add_argument("--org", required=True, help="Nombre de la organización (va en el manifiesto).")
     e.add_argument("--sal-archivo", help="Archivo con la sal en hex (si no, SAFELISTEN_SAL).")
+    e.add_argument(
+        "--empresa",
+        action="append",
+        help="Nombre con que aparece la empresa en los chats de WhatsApp (repetible). "
+        "Si se omite, se infiere quién atiende por el contenido.",
+    )
     e.set_defaults(fn=cmd_exportar)
 
     pr = sub.add_parser("procesar", help="Verifica, califica y carga un lote en DuckDB.")
     pr.add_argument("directorio")
     pr.add_argument("--duckdb", default="safelisten.duckdb")
+    pr.add_argument(
+        "--revision-llm",
+        action="store_true",
+        help="Envía a un modelo de lenguaje los casos con resolución incierta (requiere [llm] y ANTHROPIC_API_KEY).",
+    )
     pr.set_defaults(fn=cmd_procesar)
 
     en = sub.add_parser("enviar", help="Sube un lote a la API de SafeListen.")

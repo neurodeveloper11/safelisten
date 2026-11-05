@@ -63,14 +63,18 @@ class ManifiestoInvalido(Exception):
 
 def verificar(manifiesto: dict, datos: bytes) -> None:
     """Lanza ManifiestoInvalido si el lote no debe procesarse."""
+    if not isinstance(manifiesto, dict):
+        raise ManifiestoInvalido("El manifiesto debe ser un objeto JSON.")
     if manifiesto.get("esquema") != ESQUEMA:
         raise ManifiestoInvalido(f"Esquema desconocido: {manifiesto.get('esquema')!r}")
-    esperado = manifiesto.get("archivo", {}).get("sha256")
-    if esperado != sha256_bytes(datos):
+    archivo, compuerta = manifiesto.get("archivo"), manifiesto.get("compuerta")
+    if not isinstance(archivo, dict) or not isinstance(compuerta, dict):
+        raise ManifiestoInvalido("Faltan las secciones «archivo» o «compuerta».")
+    if archivo.get("sha256") != sha256_bytes(datos):
         raise ManifiestoInvalido("El SHA-256 del archivo no coincide con el manifiesto (archivo alterado).")
-    if not manifiesto.get("compuerta", {}).get("limpia"):
+    if compuerta.get("limpia") is not True:
         raise ManifiestoInvalido("La compuerta de fugas no quedó limpia en origen.")
-    if not manifiesto.get("lote_id"):
+    if not isinstance(manifiesto.get("lote_id"), str) or not manifiesto["lote_id"]:
         raise ManifiestoInvalido("Falta lote_id.")
 
 

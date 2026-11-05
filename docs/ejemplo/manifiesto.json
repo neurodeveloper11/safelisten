@@ -1,0 +1,35 @@
+{
+  "esquema": "safelisten.manifiesto/v1",
+  "lote_id": "demo-despues",
+  "organizacion": "Operación de demostración",
+  "creado_en": "2026-11-05T05:14:48+00:00",
+  "archivo": {
+    "nombre": "conversaciones.jsonl",
+    "sha256": "3b7bd078a66eff315887c75c5e92826fb83d1dd62d6a6a593d81c18f99428372",
+    "bytes": 596225
+  },
+  "privacidad": {
+    "conversaciones": 400,
+    "turnos": 4329,
+    "reemplazos_total": 707,
+    "reemplazos_por_tipo": {
+      "CEDULA": 247,
+      "NOMBRE": 460
+    },
+    "reemplazos_por_regla_dialogo": 0,
+    "reemplazos_por_regla_nombres": 4,
+    "clientes_seudonimizados": 400,
+    "metadatos_descartados": 0
+  },
+  "compuerta": {
+    "aprobadas": 400,
+    "en_cuarentena": 0,
+    "hallazgos_por_tipo": {},
+    "limpia": true
+  },
+  "software": {
+    "safelisten": "0.1.0",
+    "datashield-es": "0.5.1",
+    "alometro": "0.1.0"
+  }
+}
