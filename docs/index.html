@@ -221,10 +221,10 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
       <div class="stats">
         <div class="stat"><b>3.000</b><span>conversaciones de prueba en 10 lotes distintos</span></div>
         <div class="stat"><b>0</b><span>cédulas, nombres o ids de cliente filtrados</span></div>
-        <div class="stat"><b>15 de 16</b><span>indicadores idénticos con y sin datos personales</span></div>
-        <div class="stat"><b>&lt; 0,3 pts</b><span>de diferencia en el puntaje promedio (de 100)</span></div>
+        <div class="stat"><b>16 de 16</b><span>indicadores idénticos con y sin datos personales</span></div>
+        <div class="stat"><b>0</b><span>conversaciones con un puntaje distinto tras anonimizar</span></div>
       </div>
-      <p class="note">La única diferencia es intencional: en el texto original, que el cliente dicte su cédula dos veces se contaba también como «repitió su mensaje», además de «dato repetido». Con <code>[CEDULA]</code> ese doble conteo desaparece. Las pruebas automáticas repiten esta verificación (cero fugas e indicadores equivalentes) en cada cambio del código.</p>
+      <p class="note">Anonimizar no cambia la medición: cada criterio de cada conversación da el mismo resultado con el texto original y con el anonimizado. Las pruebas automáticas repiten esta verificación (cero fugas y resultados idénticos) en cada cambio del código.</p>
     </div>
   </section>
 

@@ -12,8 +12,8 @@ authors = [{ name = "Fabio Torres" }]
 requires-python = ">=3.10"
 dependencies = [
   # Librerías propias, fijadas a un commit para builds reproducibles.
-  "alometro @ git+https://github.com/neurodeveloper11/alometro@6d94cdf6c6ffea23e49bd9698abe11d92108ab41",
-  "datashield-es @ git+https://github.com/neurodeveloper11/pii-shield-es@a485412c1125eca49e87640344c6bf8a9b4b68f2",
+  "alometro @ git+https://github.com/neurodeveloper11/alometro@971c852f6e50228f15e7bfb65614862a459c8000",
+  "datashield-es @ git+https://github.com/neurodeveloper11/pii-shield-es@ba46cc8525abe07e8b0b872142cc923e2669774b",
 ]
 
 [project.optional-dependencies]

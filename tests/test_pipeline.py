@@ -61,12 +61,9 @@ def test_nube_rechaza_lote_con_datos_personales(tmp_path):
 
 
 def test_anonimizar_no_altera_la_medicion(convs_antes, convs_despues):
-    """Verificación clave: los indicadores son los mismos con y sin datos personales.
+    """Verificación clave: Alómetro da exactamente el mismo resultado con y sin datos personales.
 
-    Única diferencia conocida: en el texto original, que el cliente dicte su cédula dos
-    veces cuenta también como «repitió su mensaje» (criterio E5), además de «dato
-    repetido». Con «[CEDULA]» ese doble conteo desaparece. Por eso solo cambian E5 y el
-    puntaje promedio (I16), siempre en esa dirección y en pocos puntos.
+    Cada criterio de cada conversación, el puntaje y los 16 indicadores deben coincidir.
     """
     originales = convs_antes + convs_despues
     anonimas, _ = anonimizar_lote(originales, SAL)
@@ -74,10 +71,8 @@ def test_anonimizar_no_altera_la_medicion(convs_antes, convs_despues):
     ev_anon = [evaluar(c) for c in anonimas]
     for a, b in zip(ev_orig, ev_anon):
         distintos = {x.id for x, y in zip(a.criterios, b.criterios) if x.cumple != y.cumple}
-        assert distintos <= {"E5"}, (a.conversacion_id, distintos)
-        if distintos:
-            assert b.puntaje >= a.puntaje
+        assert not distintos, (a.conversacion_id, distintos)
+        assert a.puntaje == b.puntaje, a.conversacion_id
     ind_a = {i.id: i.valor for i in calcular_indicadores(ev_orig)["indicadores"]}
     ind_b = {i.id: i.valor for i in calcular_indicadores(ev_anon)["indicadores"]}
-    assert {k for k in ind_a if ind_a[k] != ind_b[k]} <= {"I16"}
-    assert abs(ind_a["I16"] - ind_b["I16"]) < 1.0
+    assert ind_a == ind_b

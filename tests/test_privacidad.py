@@ -56,7 +56,7 @@ def test_cedula_dictada_varios_turnos_despues():
     )
     anon, stats = anonimizar_lote([conv], SAL)
     assert anon[0].turnos[3].texto == "[CEDULA]"
-    assert stats.reemplazos_por_regla_dialogo == 1
+    assert stats.reemplazos_por_tipo["CEDULA"] == 1
 
 
 def test_montos_no_son_cedulas():

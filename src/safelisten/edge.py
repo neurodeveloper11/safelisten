@@ -235,13 +235,13 @@ def _recortar(texto: str, ent):
     return replace(ent, end=ent.start + len(nuevo), text=nuevo)
 
 
-def entidades(texto: str) -> list:
-    return [e for e in (_recortar(texto, x) for x in detect(texto)) if e is not None]
+def entidades(texto: str, contexto: str | None = None) -> list:
+    return [e for e in (_recortar(texto, x) for x in detect(texto, contexto=contexto)) if e is not None]
 
 
 def anonimizar_texto(texto: str, stats: EstadisticasPrivacidad | None = None, turno_anterior: str | None = None) -> str:
     protegido, marcas = proteger_radicados(texto)
-    ents = entidades(protegido)
+    ents = entidades(protegido, turno_anterior)
     salida = replace_entities(protegido, ents, "etiqueta")
     salida, por_contexto = documentos_por_contexto(salida, turno_anterior)
     salida, por_nombre = nombres_de_pila(salida)

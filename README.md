@@ -43,19 +43,18 @@ Ambas se instalan como dependencias fijadas a un commit; este repositorio no cop
 | `dbt/` | Nube | Staging y marts: indicadores diarios, cumplimiento por norma, coaching por asesor y evidencia de privacidad. Corre igual en DuckDB y en BigQuery. |
 | `infra/terraform/` | Nube | Cloud Run, BigQuery, Artifact Registry, Secret Manager y una cuenta de servicio con mínimo privilegio. |
 
-### Dos reglas que DataShield no cubre por sí sola
+### Conversaciones, no documentos sueltos
 
-1. **Documento dictado en otro turno.** DataShield reconoce «mi cédula es 1.234.567», pero en una conversación el agente pide el documento y el cliente responde varios turnos después, solo con el número («¿otra vez?» → «es necesario» → «12.635.880»). SafeListen usa los tres turnos anteriores como contexto.
-2. **Nombres de pila sueltos.** «Entiendo su preocupación, Jorge, …» o «¿Hablo con Luz Dary?». Se usa la lista de nombres de DataShield. Los nombres que también son palabras comunes (Luz, Rosa, Esperanza) solo se reemplazan con contexto.
+En atención al cliente el cliente dicta su cédula varios turnos después de que se la piden («¿otra vez?» → «es necesario» → «12.635.880») y los asesores llaman a la persona por su nombre de pila («Entiendo su preocupación, Jorge, …»). SafeListen le pasa a DataShield los tres turnos anteriores como contexto (`contexto=`, desde DataShield 0.5.1) y agrega una segunda capa propia: nombres de pila de la lista de DataShield (los que también son palabras comunes, como Luz o Rosa, solo con contexto) y recorte de cualquier entidad que termine a mitad de palabra.
 
-Además, se recortan las entidades que DataShield corta a mitad de palabra («Sebastián de ConectaYa» → `[NOMBRE] de ConectaYa`, no `[NOMBRE]Ya`).
+Estas mejoras de DataShield (contexto de diálogo, vocativos, presentación del asesor y el arreglo de entidades cortadas a mitad de palabra) salieron de las pruebas de SafeListen y se incorporaron a la librería.
 
 ## Verificación
 
 Lo que se comprobó, y que las pruebas automáticas repiten en cada cambio:
 
 * **Cero fugas:** sobre 3.000 conversaciones sintéticas (5 semillas × 2 periodos) no queda ninguna cédula, nombre de cliente ni id original, y la compuerta no pone nada en cuarentena.
-* **La anonimización no altera la medición:** 15 de los 16 indicadores de Alómetro dan exactamente igual con y sin datos personales. El puntaje promedio cambia menos de 0,3 puntos (de 100). La causa es conocida: en el texto original, que el cliente dicte su cédula dos veces cuenta también como «repitió su mensaje» (criterio E5), además de «dato repetido»; con `[CEDULA]` ese doble conteo desaparece.
+* **La anonimización no altera la medición:** cada criterio de cada conversación, el puntaje y los 16 indicadores de Alómetro dan exactamente igual con y sin datos personales. (Una primera versión mostraba una diferencia: Alómetro contaba dos veces que el cliente dictara de nuevo su cédula. Se corrigió en Alómetro.)
 * **La nube no confía en la empresa:** un lote con manifiesto válido pero con un correo en el texto se rechaza completo y no se guarda nada.
 * **Integridad:** si se altera un solo byte del archivo, el SHA-256 no coincide y el lote se rechaza.
 * **dbt:** 18 modelos y pruebas de datos, incluida una que falla si algún cliente llega sin seudónimo.
